@@ -1,0 +1,127 @@
+# Training Configuration - Full Fine-tune (Text + Audio)
+training:
+  batch_size: 4           # Batch size for TRAINING
+  eval_batch_size: 1     # Batch size for VALIDATION/TEST (if not set, uses batch_size)
+  accumulation_steps: 1
+  epochs: 5
+  base_lr: 1.0e-6
+  encoder_lr: 1.0e-6
+  scale_lr: 1.0e-6
+  whisper_lr: 1.0e-6
+  warmup_steps: 100
+  weight_decay: 5.0e-5
+  max_grad_norm: 1.0
+
+  # Loss weights - Simple config with strong edge focus
+  lambda_mae: 0.5
+  lambda_kl: 0.0
+  lambda_entropy: 0.0
+  lambda_focal: 0.5
+  lambda_ranking: 0.0
+  lambda_dist: 0.5        # Edge penalty
+  lambda_band: 0.0
+
+  # Loss parameters
+  focal_gamma: 5.0
+  focal_beta: 1.0
+  band_margin: 0.5
+  ranking_margin: 0.5
+  edge_threshold: 3.5
+  edge_penalty: 3.0       # Strong edge penalty
+  mid_penalty: 0.5
+
+  # KL/Entropy parameters
+  use_hard_targets: true
+  kl_temperature: 1.0
+
+# Model Configuration - LoRA Enabled
+model:
+  model_name: "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
+  audio_encoder_id: "openai/whisper-large-v3-turbo"
+  audio_encoder_type: "whisper"
+
+  # Text Encoder Configuration
+  text_encoder_frozen: true    # Set to true to freeze text encoder
+  text_encoder_use_lora: false  # DISABLED - Full fine-tune instead
+  text_encoder_lora_r: 16       # Not used (LoRA disabled)
+  text_encoder_lora_alpha: 32   # Not used (LoRA disabled)
+  text_encoder_lora_dropout: 0.1
+  text_encoder_lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+  # Audio Encoder - Full Fine-tune (NO LoRA)
+  audio_encoder_frozen: true     # Unfreeze for full training
+  audio_encoder_use_lora: false   # Disable LoRA, train fully instead
+  audio_encoder_lora_r: 16        # Not used (LoRA disabled)
+  audio_encoder_lora_alpha: 8     # Not used (LoRA disabled)
+  audio_encoder_lora_dropout: 0.05
+  audio_encoder_lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - out_proj
+    - fc1
+    - fc2
+
+  use_enhanced_hierarchical: true
+  d_fuse: 512
+  pooling_dropout: 0.1
+  regression_dropout: 0.1
+  avg_last_k: 4
+  num_score_bins: 21
+  num_parts: 3
+
+  adapter_bottleneck_dim: 512
+  adapter_num_heads: 8
+  adapter_dropout: 0.1
+
+  hierarchical_audio_pooling: false
+  use_gated_fusion: true
+  num_self_attn_layers: 2
+  use_question_encoder: false
+
+# Audio Configuration
+audio:
+  num_chunks: 6           # Number of chunks for TRAINING
+  eval_num_chunks: 6      # Number of chunks for VALIDATION/TEST (if not set, uses num_chunks)
+  chunk_length_sec: 30
+  sample_rate: 16000
+  max_audio_chunks: 18    # Must be >= num_parts * max(num_chunks, eval_num_chunks)
+  max_waveform_len: 480000
+
+# Data Configuration
+data:
+  train_path: "/home/user06/data/Speaking_VSTEP/Test_V2/with_instruction/unseen/full_dot3.csv"
+  val_path: "/home/user06/data/Speaking_VSTEP/Test_V2/with_instruction/unseen/test_dot4.csv"
+  test_path: "/home/user06/data/Speaking_VSTEP/20251219_DU_LIEU_AI_THU_NGHIEM/grouped_by_candidate_final_test_with_inferred_questions_formatted.csv"
+  criteria: "final"
+  max_length: 2048
+  num_workers: 8  # Reduced from 6 to avoid "excessive worker" warning
+  prefetch_factor: 4
+
+  sampling_alpha: 0.1
+  class_weight_beta: 0.95
+  edge_ratio: 0.3
+
+# Checkpoint Configuration
+checkpoint:
+  load_checkpoint: "/home/user06/Interspeech_2026/Model/Model/checkpoints_grammar/model_best_acc1_0_grammar_fusion_only_from_final_ckpt.pth"
+  save_dir: "./Model/checkpoints_finetune_acc1_0"
+  save_best_only: true
+  monitor_metric: "val_mae"
+
+# Logging Configuration
+logging:
+  log_dir: "./test_without_text"
+  wandb_project: "esl-audio-grading"
+  wandb_enabled: true
+  log_every_n_steps: 10
+
+# Experiment name
+experiment_name: "test_without_text"

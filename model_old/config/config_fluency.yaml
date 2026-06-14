@@ -1,0 +1,32 @@
+# Config for Model Old - Fluency Criterion Inference
+
+model:
+  model_name: "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
+  audio_encoder_id: "jonatasgrosman/wav2vec2-large-xlsr-53-english"
+  d_fuse: 256
+  pooling_dropout: 0.3
+  regression_dropout: 0.5
+  avg_last_k: 4
+
+audio:
+  num_chunks: 10
+  chunk_length_sec: 30
+  sample_rate: 16000
+
+data:
+  train_path: "/home/user06/data/Speaking_VSTEP/Test_V2/with_instruction/unseen/full_dot3.csv"
+  val_path: "/home/user06/data/Speaking_VSTEP/Test_V2/with_instruction/unseen/test_dot4.csv"
+  test_path: "/home/user06/data/Speaking_VSTEP/20251219_DU_LIEU_AI_THU_NGHIEM/grouped_by_candidate_final_test_with_inferred_questions_formatted.csv"
+  criteria: "fluency"
+  max_length: 2048
+  num_workers: 4
+
+inference:
+  batch_size: 1
+  edge_threshold: 3.5
+
+checkpoint:
+  load_checkpoint: "/home/user06/Interspeech_2026/model_old/model/model_V2_grammar_from_vocab_balanced_20251125_165425.pth"
+
+output:
+  save_dir: "./model_old/preds/preds_fluency"
