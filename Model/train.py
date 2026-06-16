@@ -10,10 +10,9 @@ Main training script for ESL Speaking Grading Model (text + audio)
 import argparse
 import math
 import os
-import random
+import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import torch
 from transformers import (
@@ -21,41 +20,34 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-from config import Config
-from model import ESLGradingModelByCandidatesWithAudio
-from trainer import ESLTrainerByCandidatesWithAudio
-from utils import clean_dataframe_bycandidates, get_param_groups
-from audio_encoders import AudioEncoderFactory  # NEW: For flexible audio encoder selection
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from mlama.modeling import model_kwargs_from_config, move_optimizer_state_to_device
+from mlama.reproducibility import configure_tokenizers, set_seed
+
+try:
+    from .config import Config
+    from .model import ESLGradingModelByCandidatesWithAudio
+    from .trainer import ESLTrainerByCandidatesWithAudio
+    from .utils import get_param_groups
+    from .audio_encoders import AudioEncoderFactory
+except ImportError:
+    from config import Config
+    from model import ESLGradingModelByCandidatesWithAudio
+    from trainer import ESLTrainerByCandidatesWithAudio
+    from utils import get_param_groups
+    from audio_encoders import AudioEncoderFactory
 
 
-def set_seed(seed: int = 42):
-    """Set random seeds for reproducibility."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-
-def parse_args():
+def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Train ESL Speaking Grading Model")
-    default_config = Path(__file__).with_name("config.yaml")
+    default_config = Path(__file__).parent / "config" / "config.yaml"
     parser.add_argument("--config", type=str, default=str(default_config), help="Path to config YAML")
     parser.add_argument("--no_wandb", action="store_true", help="Disable Weights & Biases logging")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint to resume from")
-    return parser.parse_args()
-
-
-def _move_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device):
-    """
-    Ensure all optimizer state tensors are moved to the target device
-    (needed when loading an optimizer state saved on CPU).
-    """
-    for state in optimizer.state.values():
-        for k, v in state.items():
-            if torch.is_tensor(v):
-                state[k] = v.to(device)
+    return parser.parse_args(argv)
 
 
 def log_trainable_params(model: torch.nn.Module) -> None:
@@ -267,20 +259,20 @@ def build_tokenizer(model_name: str):
     return tokenizer
 
 
-def main():
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     config = Config.from_yaml(args.config)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    runtime = set_seed()
+    device = runtime.device
 
     print("=" * 80)
     print(f"Experiment: {config.experiment_name}")
     print(f"Device: {device}")
+    print(f"Seed: {runtime.seed}")
     print(f"Criteria: {config.data.criteria} | Primary metric: {config.checkpoint.monitor_metric}")
     print("=" * 80)
 
-    # Seeds and env
-    set_seed()
-    #os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    configure_tokenizers(parallelism=False)
 
     # Tokenizer & audio processor
     tokenizer = build_tokenizer(config.model.model_name)
@@ -301,12 +293,9 @@ def main():
         else:
             print(f"⚠ Checkpoint not found at {ckpt_path}, starting from epoch 0.")
 
-    # Model - Build with ALL config parameters (including LoRA configs)
-    import inspect
-    sig = inspect.signature(ESLGradingModelByCandidatesWithAudio.__init__)
-    valid_params = set(sig.parameters.keys()) - {'self'}
-    model_kwargs = {k: v for k, v in config.model.__dict__.items() if k in valid_params}
-    model = ESLGradingModelByCandidatesWithAudio(**model_kwargs)
+    model = ESLGradingModelByCandidatesWithAudio(
+        **model_kwargs_from_config(ESLGradingModelByCandidatesWithAudio, config.model)
+    )
 
     log_trainable_params(model)
 
@@ -355,7 +344,7 @@ def main():
         if "optimizer_state_dict" in ckpt:
             try:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-                _move_optimizer_state_to_device(optimizer, device)
+                move_optimizer_state_to_device(optimizer, device)
                 print("✓ Optimizer state loaded from checkpoint.")
             except Exception as e:
                 print(f"⚠ Failed to load optimizer state: {e}")
@@ -383,7 +372,7 @@ def main():
             print(f"⚠ Failed to initialize wandb: {e}")
 
     # Ensure optimizer state tensors are on the right device before training
-    _move_optimizer_state_to_device(optimizer, device)
+    move_optimizer_state_to_device(optimizer, device)
 
     # Trainer
     trainer = ESLTrainerByCandidatesWithAudio(

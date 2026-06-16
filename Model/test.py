@@ -9,6 +9,7 @@ and per-range stats for edge/mid).
 import argparse
 import math
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -19,17 +20,31 @@ from sklearn.metrics import cohen_kappa_score
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from audio_encoders import AudioEncoderFactory
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from config import Config
-from dataloader import ESLDatasetByCandidatesWithAudio, get_collate_fn_bycandidates_with_audio
-from model import ESLGradingModelByCandidatesWithAudio
-from utils import clean_dataframe_bycandidates, get_class_counts_from_dataframe, get_effective_number_weights
+from mlama.modeling import find_checkpoint, model_kwargs_from_config
+from mlama.reproducibility import configure_tokenizers, set_seed
+
+try:
+    from .audio_encoders import AudioEncoderFactory
+    from .config import Config
+    from .dataloader import ESLDatasetByCandidatesWithAudio, get_collate_fn_bycandidates_with_audio
+    from .model import ESLGradingModelByCandidatesWithAudio
+    from .utils import get_class_counts_from_dataframe, get_effective_number_weights
+except ImportError:
+    from audio_encoders import AudioEncoderFactory
+    from config import Config
+    from dataloader import ESLDatasetByCandidatesWithAudio, get_collate_fn_bycandidates_with_audio
+    from model import ESLGradingModelByCandidatesWithAudio
+    from utils import get_class_counts_from_dataframe, get_effective_number_weights
 
 
-def parse_args():
+def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Inference on val/test splits")
-    parser.add_argument("--config", type=str, default="Model/config.yaml", help="Path to config YAML")
+    default_config = Path(__file__).parent / "config" / "config.yaml"
+    parser.add_argument("--config", type=str, default=str(default_config), help="Path to config YAML")
     parser.add_argument(
         "--checkpoint",
         type=str,
@@ -42,22 +57,7 @@ def parse_args():
         default="Model/preds",
         help="Directory to save prediction CSVs",
     )
-    return parser.parse_args()
-
-
-def find_checkpoint(args_ckpt: str, cfg_ckpt: str, save_dir: str) -> str:
-    if args_ckpt:
-        return args_ckpt
-    if cfg_ckpt:
-        return cfg_ckpt
-    # Try to find best checkpoint in save_dir
-    save_path = Path(save_dir)
-    if not save_path.exists():
-        raise FileNotFoundError("No checkpoint provided and save_dir does not exist.")
-    best = sorted(save_path.glob("model_best_mae_*.pth"))
-    if not best:
-        raise FileNotFoundError("No checkpoint found in save_dir.")
-    return str(best[-1])
+    return parser.parse_args(argv)
 
 
 def load_model_and_processors(cfg: Config, ckpt_path: str, device: str):
@@ -74,12 +74,9 @@ def load_model_and_processors(cfg: Config, ckpt_path: str, device: str):
     ckpt = torch.load(ckpt_path, map_location="cpu")
     state = ckpt.get("model_state_dict") or ckpt.get("state_dict") or ckpt
 
-    # Build model with ALL config parameters (including LoRA configs)
-    import inspect
-    sig = inspect.signature(ESLGradingModelByCandidatesWithAudio.__init__)
-    valid_params = set(sig.parameters.keys()) - {'self'}
-    model_kwargs = {k: v for k, v in cfg.model.__dict__.items() if k in valid_params}
-    model = ESLGradingModelByCandidatesWithAudio(**model_kwargs)
+    model = ESLGradingModelByCandidatesWithAudio(
+        **model_kwargs_from_config(ESLGradingModelByCandidatesWithAudio, cfg.model)
+    )
 
     print(f"\nLoading checkpoint with strict=False...")
     missing_keys, unexpected_keys = model.load_state_dict(state, strict=False)
@@ -261,10 +258,12 @@ def eval_split(
     return df_out, metrics
 
 
-def main():
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     cfg = Config.from_yaml(args.config)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    runtime = set_seed()
+    configure_tokenizers(parallelism=False)
+    device = runtime.device
     ckpt_path = find_checkpoint(args.checkpoint, cfg.checkpoint.load_checkpoint, cfg.checkpoint.save_dir)
     print(f"Using checkpoint: {ckpt_path}")
 

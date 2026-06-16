@@ -14,7 +14,10 @@ from torch.utils.data import Dataset, Sampler
 import numpy as np
 import ast
 from collections import Counter
-from utils import _process_audio_file, clean_dataframe_bycandidates
+try:
+    from .utils import _process_audio_file, clean_dataframe_bycandidates
+except ImportError:
+    from utils import _process_audio_file, clean_dataframe_bycandidates
 
 
 # ============================================================================

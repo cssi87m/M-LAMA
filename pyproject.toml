@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlama"
+version = "0.1.0"
+description = "M-LAMA multimodal long-form automated spoken English scoring experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyyaml",
+    "torch",
+    "transformers",
+    "peft",
+    "librosa",
+    "scikit-learn",
+    "scipy",
+    "tqdm",
+    "wandb",
+    "nltk",
+    "matplotlib",
+    "seaborn",
+]
+
+[project.scripts]
+mlama = "mlama.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mlama*", "Model*", "Exp2_noaudio*", "Exp2_notext*", "Model_finetune_3_stages*"]

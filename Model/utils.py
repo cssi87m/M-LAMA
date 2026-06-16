@@ -1,6 +1,5 @@
 """
 Utility functions for ESL Speaking Grading Model
-Copied and adapted from train_W2VAudio_bycandidates_V2.py
 """
 
 import torch
@@ -10,12 +9,12 @@ import librosa
 import gc
 import asyncio
 from typing import List
-import sys
 import os
 
-# Add parent directory to path for text_processing import
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'model_old'))
-from text_processing import replace_repeats, is_low_content
+try:
+    from .text_processing import replace_repeats, is_low_content
+except ImportError:
+    from text_processing import replace_repeats, is_low_content
 
 
 # ============================================================================

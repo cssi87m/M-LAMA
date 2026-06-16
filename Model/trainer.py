@@ -27,18 +27,32 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
 
-from dataloader import (
-    ESLDatasetByCandidatesWithAudio,
-    StratifiedScoreSampler,
-    get_collate_fn_bycandidates_with_audio
-)
-from losses import compute_combined_loss
-from utils import (
-    clean_dataframe_bycandidates,
-    get_class_counts_from_dataframe,
-    get_effective_number_weights,
-    maybe_empty_cache
-)
+try:
+    from .dataloader import (
+        ESLDatasetByCandidatesWithAudio,
+        StratifiedScoreSampler,
+        get_collate_fn_bycandidates_with_audio,
+    )
+    from .losses import compute_combined_loss
+    from .utils import (
+        clean_dataframe_bycandidates,
+        get_class_counts_from_dataframe,
+        get_effective_number_weights,
+        maybe_empty_cache,
+    )
+except ImportError:
+    from dataloader import (
+        ESLDatasetByCandidatesWithAudio,
+        StratifiedScoreSampler,
+        get_collate_fn_bycandidates_with_audio,
+    )
+    from losses import compute_combined_loss
+    from utils import (
+        clean_dataframe_bycandidates,
+        get_class_counts_from_dataframe,
+        get_effective_number_weights,
+        maybe_empty_cache,
+    )
 
 
 class ESLTrainerByCandidatesWithAudio:
