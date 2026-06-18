@@ -285,6 +285,15 @@ Check the package CLI:
 python3 -m mlama.cli --help
 ```
 
+## Contact
+
+For inquiries regarding data access or technical details related to this paper, please contact:
+
+- minh.dxq225449@sis.hust.edu.vn
+- son.dn225997@sis.hust.edu.vn
+- anhbtm@soict.edu.vn
+- lenp@soict.edu.vn
+
 ## Citation
 
 If you use this code, cite the associated paper:
